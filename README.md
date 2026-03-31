@@ -51,6 +51,13 @@ Requires internet on the target machine.
 | Icons | `~/.icons/`, `~/.local/share/icons/` | Icon packs, cursors |
 | Fonts | `~/.local/share/fonts/` | User-installed fonts |
 | LightDM | `/etc/lightdm/` | Display manager greeter config |
+| APT sources | `/etc/apt/sources.list`, `sources.list.d/` | Repositories, mirrors, preferences |
+| APT keys | `/etc/apt/trusted.gpg.d/`, `/usr/share/keyrings/` | GPG keys for repos |
+| Package list | `apt-mark showmanual` | Reference list of manually installed packages |
+| Sudoers | `/etc/sudoers.d/` | Custom sudo rules (syntax-checked before install) |
+| Sysctl | `/etc/sysctl.conf`, `/etc/sysctl.d/` | Kernel parameters |
+| Environment | `/etc/environment`, `/etc/profile`, `/etc/profile.d/` | System-wide env vars and shell configs |
+| Systemd | `~/.config/systemd/user/` | User-level systemd units |
 | Wallpapers | `~/Pictures/Wallpapers/` | Up to 20 images |
 | Git | `~/.gitconfig` | Git settings (remember to update name/email!) |
 
@@ -62,5 +69,9 @@ Requires internet on the target machine.
 
 - Existing dotfiles are backed up as `<file>.backup.<date>` before overwriting
 - The `configs/` folder is `.gitignore`d since it contains machine-specific data
-- LightDM config requires sudo
+- APT sources are restored **before** `apt update` so third-party repos are available
+- Sudoers rules are validated with `visudo -c` before install (broken rules = locked out)
+- Mirror URLs in `sources.list` may need editing if the target is in a different region
+- `sysctl` params are applied immediately after copy
+- LightDM and system configs require sudo
 - After install, log out and back in for all changes to take effect

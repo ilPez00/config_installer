@@ -45,7 +45,42 @@ echo
 [[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Aborted."; exit 1; }
 
 # ─────────────────────────────────────────────────────────────
-# 1. System update & essential packages
+# 1a. Restore APT sources & keys (before update so repos are available)
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/apt/sources" ]; then
+    info "Restoring APT sources and repository keys"
+
+    # Backup existing sources
+    sudo cp -a /etc/apt/sources.list /etc/apt/sources.list.backup 2>/dev/null || true
+    [ -d /etc/apt/sources.list.d ] && sudo cp -a /etc/apt/sources.list.d /etc/apt/sources.list.d.backup 2>/dev/null || true
+
+    # Restore sources
+    [ -f "$CONFIGS_DIR/apt/sources/sources.list" ] && sudo cp -a "$CONFIGS_DIR/apt/sources/sources.list" /etc/apt/
+    [ -d "$CONFIGS_DIR/apt/sources/sources.list.d" ] && sudo cp -a "$CONFIGS_DIR/apt/sources/sources.list.d/"* /etc/apt/sources.list.d/ 2>/dev/null || true
+
+    # Restore preferences
+    [ -f "$CONFIGS_DIR/apt/sources/preferences" ] && sudo cp -a "$CONFIGS_DIR/apt/sources/preferences" /etc/apt/
+    [ -d "$CONFIGS_DIR/apt/sources/preferences.d" ] && sudo cp -a "$CONFIGS_DIR/apt/sources/preferences.d" /etc/apt/
+
+    # Restore GPG keys (legacy method)
+    [ -f "$CONFIGS_DIR/apt/keys/trusted-keys.gpg" ] && sudo apt-key add "$CONFIGS_DIR/apt/keys/trusted-keys.gpg" 2>/dev/null || true
+    [ -f "$CONFIGS_DIR/apt/keys/trusted.gpg" ] && sudo cp -a "$CONFIGS_DIR/apt/keys/trusted.gpg" /etc/apt/ 2>/dev/null || true
+    [ -d "$CONFIGS_DIR/apt/keys/trusted.gpg.d" ] && sudo cp -a "$CONFIGS_DIR/apt/keys/trusted.gpg.d/"* /etc/apt/trusted.gpg.d/ 2>/dev/null || true
+
+    # Restore keyrings (modern method)
+    if [ -d "$CONFIGS_DIR/apt/keys/keyrings" ]; then
+        sudo mkdir -p /usr/share/keyrings
+        sudo cp -a "$CONFIGS_DIR/apt/keys/keyrings/"* /usr/share/keyrings/ 2>/dev/null || true
+    fi
+
+    info "  APT sources, keys, and keyrings restored"
+    warn "  Review /etc/apt/sources.list — mirror URLs may need updating for this machine"
+else
+    warn "No APT sources found in configs, using system defaults"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 1b. System update & essential packages
 # ─────────────────────────────────────────────────────────────
 info "Updating system"
 sudo apt update && sudo apt upgrade -y
@@ -216,6 +251,64 @@ if [ -d "$CONFIGS_DIR/lightdm" ]; then
     info "Configuring LightDM"
     sudo cp -a "$CONFIGS_DIR/lightdm/"* /etc/lightdm/ 2>/dev/null || true
     info "  LightDM greeter config copied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 9b. Sudoers config
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/system/sudoers.d" ] && ls "$CONFIGS_DIR/system/sudoers.d/"* &>/dev/null; then
+    info "Restoring sudoers.d rules"
+    for rule in "$CONFIGS_DIR/system/sudoers.d/"*; do
+        filename=$(basename "$rule")
+        # Validate syntax before installing (broken sudoers = locked out)
+        if visudo -cf "$rule" &>/dev/null; then
+            sudo cp "$rule" /etc/sudoers.d/"$filename"
+            sudo chmod 0440 /etc/sudoers.d/"$filename"
+            info "  Installed: /etc/sudoers.d/$filename"
+        else
+            warn "  Skipped $filename — failed syntax check (visudo -c)"
+        fi
+    done
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 9c. Sysctl (kernel params)
+# ─────────────────────────────────────────────────────────────
+if [ -f "$CONFIGS_DIR/system/sysctl.conf" ] || ls "$CONFIGS_DIR/system/sysctl.d/"*.conf &>/dev/null 2>&1; then
+    info "Restoring sysctl config"
+    [ -f "$CONFIGS_DIR/system/sysctl.conf" ] && sudo cp -a "$CONFIGS_DIR/system/sysctl.conf" /etc/sysctl.conf
+    if [ -d "$CONFIGS_DIR/system/sysctl.d" ]; then
+        sudo mkdir -p /etc/sysctl.d
+        sudo cp -a "$CONFIGS_DIR/system/sysctl.d/"*.conf /etc/sysctl.d/ 2>/dev/null || true
+    fi
+    sudo sysctl --system 2>/dev/null || true
+    info "  Sysctl params applied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 9d. System-wide environment & shell configs
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/system/environment" ]; then
+    info "Restoring system environment"
+    [ -f "$CONFIGS_DIR/system/environment/environment" ] && sudo cp -a "$CONFIGS_DIR/system/environment/environment" /etc/environment
+    [ -f "$CONFIGS_DIR/system/environment/profile" ] && sudo cp -a "$CONFIGS_DIR/system/environment/profile" /etc/profile
+    [ -d "$CONFIGS_DIR/system/environment/profile.d" ] && sudo cp -a "$CONFIGS_DIR/system/environment/profile.d/"* /etc/profile.d/ 2>/dev/null || true
+    # System shell configs
+    [ -d "$CONFIGS_DIR/system/environment/zsh" ] && sudo cp -a "$CONFIGS_DIR/system/environment/zsh" /etc/ 2>/dev/null || true
+    [ -f "$CONFIGS_DIR/system/environment/zshrc" ] && sudo cp -a "$CONFIGS_DIR/system/environment/zshrc" /etc/zshrc 2>/dev/null || true
+    [ -f "$CONFIGS_DIR/system/environment/bash.bashrc" ] && sudo cp -a "$CONFIGS_DIR/system/environment/bash.bashrc" /etc/bash.bashrc 2>/dev/null || true
+    info "  /etc/environment, /etc/profile, shell configs restored"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 9e. Systemd user units
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/system/systemd-user" ] && ls "$CONFIGS_DIR/system/systemd-user/"* &>/dev/null; then
+    info "Restoring systemd user units"
+    mkdir -p "$HOME_DIR/.config/systemd/user"
+    rsync -a "$CONFIGS_DIR/system/systemd-user/" "$HOME_DIR/.config/systemd/user/"
+    systemctl --user daemon-reload 2>/dev/null || true
+    info "  Systemd user units copied and daemon reloaded"
 fi
 
 # ─────────────────────────────────────────────────────────────

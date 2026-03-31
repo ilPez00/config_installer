@@ -30,7 +30,13 @@ mkdir -p \
     "$OUT/local-icons" \
     "$OUT/fonts" \
     "$OUT/lightdm" \
-    "$OUT/wallpapers"
+    "$OUT/wallpapers" \
+    "$OUT/apt/sources" \
+    "$OUT/apt/keys" \
+    "$OUT/system/sudoers.d" \
+    "$OUT/system/sysctl.d" \
+    "$OUT/system/systemd-user" \
+    "$OUT/system/environment"
 
 # ── Shell dotfiles ──
 info "Shell dotfiles"
@@ -114,6 +120,57 @@ if [ -d ~/Pictures/Wallpapers ]; then
     find ~/Pictures/Wallpapers -type f \( -name "*.jpg" -o -name "*.png" \) | head -20 | while read -r wp; do
         cp "$wp" "$OUT/wallpapers/" 2>/dev/null || true
     done
+fi
+
+# ── APT sources & keys ──
+info "APT sources and repository keys"
+sudo cp -a /etc/apt/sources.list "$OUT/apt/sources/" 2>/dev/null || true
+[ -d /etc/apt/sources.list.d ] && sudo cp -a /etc/apt/sources.list.d "$OUT/apt/sources/" 2>/dev/null || true
+[ -f /etc/apt/preferences ] && sudo cp -a /etc/apt/preferences "$OUT/apt/sources/" 2>/dev/null || true
+[ -d /etc/apt/preferences.d ] && sudo cp -a /etc/apt/preferences.d "$OUT/apt/sources/" 2>/dev/null || true
+
+# GPG keys for repos
+sudo apt-key exportall > "$OUT/apt/keys/trusted-keys.gpg" 2>/dev/null || true
+[ -f /etc/apt/trusted.gpg ] && sudo cp -a /etc/apt/trusted.gpg "$OUT/apt/keys/" 2>/dev/null || true
+[ -d /etc/apt/trusted.gpg.d ] && sudo cp -a /etc/apt/trusted.gpg.d "$OUT/apt/keys/" 2>/dev/null || true
+# Keyrings from /usr/share (modern method)
+if [ -d /usr/share/keyrings ]; then
+    mkdir -p "$OUT/apt/keys/keyrings"
+    sudo cp -a /usr/share/keyrings/*.gpg "$OUT/apt/keys/keyrings/" 2>/dev/null || true
+    sudo cp -a /usr/share/keyrings/*.asc "$OUT/apt/keys/keyrings/" 2>/dev/null || true
+fi
+
+# Manually installed package list (for reference)
+info "APT package lists"
+apt-mark showmanual > "$OUT/apt/manual-packages.list" 2>/dev/null || true
+
+# ── Sudoers config ──
+info "Sudoers config"
+# Only custom rules in sudoers.d, never the main /etc/sudoers (security risk)
+if [ -d /etc/sudoers.d ]; then
+    sudo cp -a /etc/sudoers.d/* "$OUT/system/sudoers.d/" 2>/dev/null || true
+fi
+
+# ── Sysctl (kernel params) ──
+info "Sysctl config"
+[ -f /etc/sysctl.conf ] && sudo cp -a /etc/sysctl.conf "$OUT/system/" 2>/dev/null || true
+if [ -d /etc/sysctl.d ]; then
+    sudo cp -a /etc/sysctl.d/*.conf "$OUT/system/sysctl.d/" 2>/dev/null || true
+fi
+
+# ── System-wide environment ──
+info "System environment"
+[ -f /etc/environment ] && sudo cp -a /etc/environment "$OUT/system/environment/" 2>/dev/null || true
+[ -f /etc/profile ] && sudo cp -a /etc/profile "$OUT/system/environment/" 2>/dev/null || true
+[ -d /etc/profile.d ] && sudo cp -a /etc/profile.d "$OUT/system/environment/" 2>/dev/null || true
+# Shell-level system configs
+sudo cp -a /etc/{zsh,zshrc,bash.bashrc} "$OUT/system/environment/" 2>/dev/null || true
+[ -d /etc/bashrc.d ] && sudo cp -a /etc/bashrc.d "$OUT/system/environment/" 2>/dev/null || true
+
+# ── Systemd user units ──
+info "Systemd user units"
+if [ -d ~/.config/systemd/user ]; then
+    rsync -a ~/.config/systemd/user/ "$OUT/system/systemd-user/" 2>/dev/null || true
 fi
 
 # ── Summary ──
