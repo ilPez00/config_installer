@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+# Installs configs, shell, editor, themes, and tools on a fresh Debian install.
+# Replicates the look & feel of the source machine (terminal + XFCE desktop).
+# Does NOT install heavy packages (IDEs, games, etc.).
+set -e
+
+# ─────────────────────────────────────────────────────────────
+# Colors
+# ─────────────────────────────────────────────────────────────
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[+]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[!]${NC} $1"; }
+error() { echo -e "${RED}[✗]${NC} $1"; }
+
+# ─────────────────────────────────────────────────────────────
+# Locate configs/ relative to this script
+# ─────────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIGS_DIR="$SCRIPT_DIR/configs"
+
+if [ ! -d "$CONFIGS_DIR" ]; then
+    error "configs/ folder not found at $CONFIGS_DIR"
+    echo "  Run pack_configs on the source machine first."
+    exit 1
+fi
+
+USER_NAME="$USER"
+HOME_DIR="$HOME"
+
+echo ""
+echo "══════════════════════════════════════════"
+echo "       DEBIAN CONFIG INSTALLER"
+echo "══════════════════════════════════════════"
+echo ""
+echo "  User:    $USER_NAME"
+echo "  Home:    $HOME_DIR"
+echo "  Configs: $CONFIGS_DIR"
+echo ""
+read -p "Continue? (y/N) " -n 1 -r
+echo
+[[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Aborted."; exit 1; }
+
+# ─────────────────────────────────────────────────────────────
+# 1. System update & essential packages
+# ─────────────────────────────────────────────────────────────
+info "Updating system"
+sudo apt update && sudo apt upgrade -y
+
+info "Installing essential packages"
+sudo apt install -y \
+    git curl wget unzip rsync \
+    zsh \
+    zsh-autosuggestions \
+    zsh-syntax-highlighting \
+    micro \
+    fastfetch neofetch \
+    htop btop \
+    lsd bat fd-find \
+    ranger \
+    fzf \
+    zoxide \
+    thefuck \
+    direnv \
+    yt-dlp \
+    papirus-icon-theme \
+    2>/dev/null || warn "Some packages may not be available in your repos"
+
+# Nerd Fonts: download manually if not available via apt
+if ! fc-list | grep -qi "MesloLG"; then
+    info "Downloading MesloLGS Nerd Font (for Powerlevel10k)"
+    mkdir -p ~/.local/share/fonts
+    cd /tmp
+    for font in "MesloLGS NF Regular" "MesloLGS NF Bold" "MesloLGS NF Italic" "MesloLGS NF Bold Italic"; do
+        fname="${font// /%20}.ttf"
+        wget -q "https://github.com/romkatv/powerlevel10k-media/raw/master/${fname}" \
+            -O "$HOME_DIR/.local/share/fonts/${font}.ttf" 2>/dev/null || true
+    done
+    fc-cache -f 2>/dev/null || true
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 2. Oh My Zsh + Powerlevel10k
+# ─────────────────────────────────────────────────────────────
+if [ ! -d "$HOME_DIR/.oh-my-zsh" ]; then
+    info "Installing Oh My Zsh"
+    RUNZSH=no CHSH=no sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+else
+    warn "Oh My Zsh already installed, skipping"
+fi
+
+if [ ! -d "$HOME_DIR/.oh-my-zsh/custom/themes/powerlevel10k" ]; then
+    info "Installing Powerlevel10k theme"
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git \
+        "$HOME_DIR/.oh-my-zsh/custom/themes/powerlevel10k"
+else
+    warn "Powerlevel10k already installed, skipping"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 3. Shell configs (.zshrc, .p10k.zsh, .bashrc)
+# ─────────────────────────────────────────────────────────────
+info "Installing shell configs"
+
+for dotfile in .zshrc .p10k.zsh .bashrc; do
+    if [ -f "$CONFIGS_DIR/home/$dotfile" ]; then
+        if [ -f "$HOME_DIR/$dotfile" ]; then
+            cp "$HOME_DIR/$dotfile" "$HOME_DIR/${dotfile}.backup.$(date +%Y%m%d)" 2>/dev/null || true
+        fi
+        cp "$CONFIGS_DIR/home/$dotfile" "$HOME_DIR/$dotfile"
+        info "  Copied: $dotfile"
+    fi
+done
+
+# ─────────────────────────────────────────────────────────────
+# 4. Micro editor (config + colorscheme)
+# ─────────────────────────────────────────────────────────────
+info "Configuring Micro editor"
+mkdir -p "$HOME_DIR/.config/micro/colorschemes"
+
+if [ -d "$CONFIGS_DIR/config/micro" ]; then
+    cp -a "$CONFIGS_DIR/config/micro/settings.json"   "$HOME_DIR/.config/micro/" 2>/dev/null || true
+    cp -a "$CONFIGS_DIR/config/micro/bindings.json"    "$HOME_DIR/.config/micro/" 2>/dev/null || true
+    cp -a "$CONFIGS_DIR/config/micro/colorschemes/"*   "$HOME_DIR/.config/micro/colorschemes/" 2>/dev/null || true
+    info "  Micro: settings, bindings, colorscheme copied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 5. Fastfetch config
+# ─────────────────────────────────────────────────────────────
+info "Configuring Fastfetch"
+mkdir -p "$HOME_DIR/.config/fastfetch"
+
+if [ -f "$CONFIGS_DIR/config/fastfetch/config.jsonc" ]; then
+    cp "$CONFIGS_DIR/config/fastfetch/config.jsonc" "$HOME_DIR/.config/fastfetch/"
+    info "  Fastfetch config copied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 6. XFCE4 desktop config
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/config/xfce4" ]; then
+    info "Configuring XFCE4"
+    mkdir -p "$HOME_DIR/.config/xfce4"
+    rsync -a "$CONFIGS_DIR/config/xfce4/" "$HOME_DIR/.config/xfce4/"
+    info "  XFCE4: panels, shortcuts, window manager copied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 6b. Autostart & Thunar
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/config/autostart" ]; then
+    info "Autostart entries"
+    mkdir -p "$HOME_DIR/.config/autostart"
+    cp -a "$CONFIGS_DIR/config/autostart/"* "$HOME_DIR/.config/autostart/" 2>/dev/null || true
+fi
+
+if [ -d "$CONFIGS_DIR/config/Thunar" ]; then
+    info "Thunar file manager config"
+    mkdir -p "$HOME_DIR/.config/Thunar"
+    rsync -a "$CONFIGS_DIR/config/Thunar/" "$HOME_DIR/.config/Thunar/"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 7. GTK themes, icons, cursors
+# ─────────────────────────────────────────────────────────────
+info "Installing themes, icons, cursors"
+
+if [ -d "$CONFIGS_DIR/themes" ]; then
+    mkdir -p "$HOME_DIR/.themes"
+    rsync -a "$CONFIGS_DIR/themes/" "$HOME_DIR/.themes/"
+    info "  GTK themes copied"
+fi
+
+if [ -d "$CONFIGS_DIR/icons" ]; then
+    mkdir -p "$HOME_DIR/.icons"
+    rsync -a "$CONFIGS_DIR/icons/" "$HOME_DIR/.icons/"
+    info "  Icons copied"
+fi
+
+if [ -d "$CONFIGS_DIR/local-icons" ]; then
+    mkdir -p "$HOME_DIR/.local/share/icons"
+    rsync -a "$CONFIGS_DIR/local-icons/" "$HOME_DIR/.local/share/icons/"
+    info "  Extra icons copied (.local/share)"
+fi
+
+if [ -d "$CONFIGS_DIR/config/gtk-3.0" ]; then
+    mkdir -p "$HOME_DIR/.config/gtk-3.0"
+    cp -a "$CONFIGS_DIR/config/gtk-3.0/"* "$HOME_DIR/.config/gtk-3.0/" 2>/dev/null || true
+    info "  GTK-3.0 settings copied"
+fi
+
+if [ -d "$CONFIGS_DIR/config/gtk-4.0" ]; then
+    mkdir -p "$HOME_DIR/.config/gtk-4.0"
+    cp -a "$CONFIGS_DIR/config/gtk-4.0/"* "$HOME_DIR/.config/gtk-4.0/" 2>/dev/null || true
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 8. User fonts
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/fonts" ]; then
+    info "Installing user fonts"
+    mkdir -p "$HOME_DIR/.local/share/fonts"
+    rsync -a "$CONFIGS_DIR/fonts/" "$HOME_DIR/.local/share/fonts/"
+    fc-cache -f 2>/dev/null || true
+    info "  Fonts copied and cache updated"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 9. LightDM config (if present)
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/lightdm" ]; then
+    info "Configuring LightDM"
+    sudo cp -a "$CONFIGS_DIR/lightdm/"* /etc/lightdm/ 2>/dev/null || true
+    info "  LightDM greeter config copied"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 10. Wallpapers
+# ─────────────────────────────────────────────────────────────
+if [ -d "$CONFIGS_DIR/wallpapers" ]; then
+    info "Copying wallpapers"
+    mkdir -p "$HOME_DIR/Pictures/Wallpapers"
+    rsync -a "$CONFIGS_DIR/wallpapers/" "$HOME_DIR/Pictures/Wallpapers/"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 11. Git config
+# ─────────────────────────────────────────────────────────────
+if [ -f "$CONFIGS_DIR/home/.gitconfig" ]; then
+    info "Git config"
+    cp "$CONFIGS_DIR/home/.gitconfig" "$HOME_DIR/.gitconfig"
+    warn "  Remember to update name/email in ~/.gitconfig!"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 12. Set Zsh as default shell
+# ─────────────────────────────────────────────────────────────
+if [ "$SHELL" != "$(which zsh)" ]; then
+    info "Setting Zsh as default shell"
+    chsh -s "$(which zsh)" || warn "Run manually: chsh -s $(which zsh)"
+fi
+
+# ─────────────────────────────────────────────────────────────
+# 13. Rebuild caches
+# ─────────────────────────────────────────────────────────────
+info "Rebuilding caches"
+fc-cache -f 2>/dev/null || true
+gtk-update-icon-cache ~/.local/share/icons/* 2>/dev/null || true
+gtk-update-icon-cache ~/.icons/* 2>/dev/null || true
+
+echo ""
+echo "══════════════════════════════════════════"
+echo "          SETUP COMPLETE!"
+echo "══════════════════════════════════════════"
+echo ""
+echo "  Installed:"
+echo "    - Zsh + Oh My Zsh + Powerlevel10k"
+echo "    - Micro editor + colorscheme"
+echo "    - Fastfetch"
+echo "    - lsd, bat, fd, ranger, fzf, zoxide, thefuck"
+echo "    - GTK themes, icons, cursors"
+echo "    - XFCE4 desktop config"
+echo "    - Fonts (MesloLGS Nerd Font)"
+echo ""
+echo "  To do:"
+echo "    - Update name/email in ~/.gitconfig"
+echo "    - Log out and back in"
+echo "    - On first zsh launch: Powerlevel10k will run its wizard"
+echo "      (or use the copied .p10k.zsh config)"
+echo ""

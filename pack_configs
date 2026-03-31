@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# Packs configs from THIS machine into a configs/ folder.
+# Run on the SOURCE machine, then copy configs/ to a USB drive or use install_configs on the target.
+set -e
+
+GREEN='\033[0;32m'
+NC='\033[0m'
+info() { echo -e "${GREEN}[+]${NC} $1"; }
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OUT="$SCRIPT_DIR/configs"
+
+echo ""
+echo "══════════════════════════════════════════"
+echo "       PACK CONFIGS — source machine"
+echo "══════════════════════════════════════════"
+echo "  Output: $OUT"
+echo ""
+
+rm -rf "$OUT"
+mkdir -p \
+    "$OUT/home" \
+    "$OUT/config/micro/colorschemes" \
+    "$OUT/config/fastfetch" \
+    "$OUT/config/xfce4" \
+    "$OUT/config/gtk-3.0" \
+    "$OUT/config/gtk-4.0" \
+    "$OUT/themes" \
+    "$OUT/icons" \
+    "$OUT/local-icons" \
+    "$OUT/fonts" \
+    "$OUT/lightdm" \
+    "$OUT/wallpapers"
+
+# ── Shell dotfiles ──
+info "Shell dotfiles"
+for f in .zshrc .p10k.zsh .bashrc .gitconfig .selected_editor; do
+    [ -f ~/"$f" ] && cp ~/"$f" "$OUT/home/" && echo "    $f"
+done
+
+# ── Micro editor ──
+info "Micro editor config"
+[ -f ~/.config/micro/settings.json ] && cp ~/.config/micro/settings.json "$OUT/config/micro/"
+[ -f ~/.config/micro/bindings.json ] && cp ~/.config/micro/bindings.json "$OUT/config/micro/"
+cp ~/.config/micro/colorschemes/* "$OUT/config/micro/colorschemes/" 2>/dev/null || true
+
+# ── Fastfetch ──
+info "Fastfetch config"
+[ -f ~/.config/fastfetch/config.jsonc ] && cp ~/.config/fastfetch/config.jsonc "$OUT/config/fastfetch/"
+
+# ── XFCE4 ──
+info "XFCE4 config"
+if [ -d ~/.config/xfce4 ]; then
+    rsync -a \
+        --exclude="*cache*" \
+        --exclude="*Cache*" \
+        ~/.config/xfce4/ "$OUT/config/xfce4/"
+fi
+
+# ── Autostart ──
+info "Autostart entries"
+if [ -d ~/.config/autostart ]; then
+    mkdir -p "$OUT/config/autostart"
+    cp -a ~/.config/autostart/* "$OUT/config/autostart/" 2>/dev/null || true
+fi
+
+# ── Thunar file manager ──
+info "Thunar config"
+if [ -d ~/.config/Thunar ]; then
+    mkdir -p "$OUT/config/Thunar"
+    rsync -a ~/.config/Thunar/ "$OUT/config/Thunar/"
+fi
+
+# ── GTK settings ──
+info "GTK settings"
+[ -d ~/.config/gtk-3.0 ] && cp -a ~/.config/gtk-3.0/* "$OUT/config/gtk-3.0/" 2>/dev/null || true
+[ -d ~/.config/gtk-4.0 ] && cp -a ~/.config/gtk-4.0/* "$OUT/config/gtk-4.0/" 2>/dev/null || true
+
+# ── GTK Themes ──
+info "GTK themes"
+if [ -d ~/.themes ]; then
+    find ~/.themes -maxdepth 1 -mindepth 1 -type d | while read -r dir; do
+        rsync -a "$dir" "$OUT/themes/"
+        echo "    $(basename "$dir")"
+    done
+fi
+
+# ── Icons ──
+info "Icons (~/.icons)"
+if [ -d ~/.icons ]; then
+    rsync -a ~/.icons/ "$OUT/icons/"
+fi
+
+info "Icons (.local/share/icons)"
+if [ -d ~/.local/share/icons ]; then
+    rsync -a ~/.local/share/icons/ "$OUT/local-icons/"
+fi
+
+# ── Fonts ──
+info "User fonts"
+if [ -d ~/.local/share/fonts ]; then
+    rsync -a ~/.local/share/fonts/ "$OUT/fonts/"
+fi
+
+# ── LightDM ──
+info "LightDM config"
+sudo cp -a /etc/lightdm/lightdm.conf "$OUT/lightdm/" 2>/dev/null || true
+sudo cp -a /etc/lightdm/lightdm-gtk-greeter.conf "$OUT/lightdm/" 2>/dev/null || true
+[ -d /etc/lightdm/lightdm.conf.d ] && sudo cp -a /etc/lightdm/lightdm.conf.d "$OUT/lightdm/" 2>/dev/null || true
+
+# ── Wallpapers (lightweight, max 20) ──
+info "Wallpapers"
+if [ -d ~/Pictures/Wallpapers ]; then
+    find ~/Pictures/Wallpapers -type f \( -name "*.jpg" -o -name "*.png" \) | head -20 | while read -r wp; do
+        cp "$wp" "$OUT/wallpapers/" 2>/dev/null || true
+    done
+fi
+
+# ── Summary ──
+echo ""
+SIZE=$(du -sh "$OUT" | cut -f1)
+echo "══════════════════════════════════════════"
+echo "  Pack complete: $OUT"
+echo "  Size: $SIZE"
+echo "══════════════════════════════════════════"
+echo ""
+echo "  Next steps:"
+echo "    1. Copy this folder to a USB drive"
+echo "    2. On the target machine:"
+echo "       cd /media/.../config_installer"
+echo "       bash install_configs"
+echo ""
