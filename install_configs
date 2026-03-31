@@ -45,6 +45,16 @@ echo
 [[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Aborted."; exit 1; }
 
 # ─────────────────────────────────────────────────────────────
+# 0. Bootstrap: install bare minimum tools needed by this script
+# ─────────────────────────────────────────────────────────────
+info "Installing bootstrap dependencies (git, curl, wget, rsync)"
+sudo apt update
+sudo apt install -y git curl wget rsync unzip 2>/dev/null || {
+    error "Failed to install basic tools. Check your internet connection and /etc/apt/sources.list"
+    exit 1
+}
+
+# ─────────────────────────────────────────────────────────────
 # 1a. Restore APT sources & keys (before update so repos are available)
 # ─────────────────────────────────────────────────────────────
 if [ -d "$CONFIGS_DIR/apt/sources" ]; then
@@ -87,7 +97,6 @@ sudo apt update && sudo apt upgrade -y
 
 info "Installing essential packages"
 sudo apt install -y \
-    git curl wget unzip rsync \
     zsh \
     zsh-autosuggestions \
     zsh-syntax-highlighting \
