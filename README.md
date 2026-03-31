@@ -2,39 +2,52 @@
 
 Clone your Debian desktop + terminal setup onto a fresh machine.
 
-Packs and installs: **Zsh** (Oh My Zsh + Powerlevel10k), **Micro** editor (Dracula theme), **Fastfetch**, modern CLI tools (lsd, bat, fd, ranger, fzf, zoxide, thefuck), **XFCE4** desktop config (panels, shortcuts, window manager), GTK themes, icon packs, cursors, fonts, LightDM greeter, and wallpapers.
+Packs and installs: **Zsh** (Oh My Zsh + Powerlevel10k), **Micro** editor (Dracula theme), **Fastfetch**, modern CLI tools (lsd, bat, fd, ranger, fzf, zoxide, thefuck), **XFCE4** desktop config (panels, shortcuts, window manager), GTK themes, icon packs, cursors, fonts, LightDM greeter, APT sources/keys, sudoers, sysctl, and wallpapers.
 
-## Usage
+## Quick start
 
-### 1. Pack configs (on your machine)
+### One-liner download
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/ilPez00/config_installer/master/get | bash
+```
+
+This downloads the repo to `~/config_installer` and tells you what to do next.
+
+### Full workflow
+
+**On your machine** (source):
+```bash
+git clone https://github.com/ilPez00/config_installer.git
+cd config_installer
 bash pack_configs
 ```
 
-This creates a `configs/` folder with all your dotfiles, themes, icons, fonts, and desktop settings.
-
-### 2. Copy to USB / SD card
-
+**Copy to USB** (or any transfer method):
 ```bash
 cp -r . /media/your-drive/config_installer/
 ```
 
-### 3. Install (on the target machine)
-
+**On the target machine**:
 ```bash
 cd /media/.../config_installer
 bash install_configs
 ```
 
-The script will:
-- Install packages via apt (zsh, micro, fastfetch, lsd, bat, etc.)
-- Install Oh My Zsh + Powerlevel10k
-- Download MesloLGS Nerd Font
-- Copy all configs, themes, icons, fonts
-- Set Zsh as default shell
+Or if both machines have internet, transfer configs directly without USB:
+```bash
+# Source machine: pack and push configs to a private place
+bash pack_configs
+tar czf configs.tar.gz configs/
+# Transfer configs.tar.gz to target via scp, cloud, etc.
 
-Requires internet on the target machine.
+# Target machine:
+curl -fsSL https://raw.githubusercontent.com/ilPez00/config_installer/master/get | bash
+cd ~/config_installer
+# Place your configs.tar.gz here, then:
+tar xzf configs.tar.gz
+bash install_configs
+```
 
 ## What gets packed
 

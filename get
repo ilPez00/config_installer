@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# One-liner installer: curl -fsSL https://raw.githubusercontent.com/ilPez00/config_installer/master/get | bash
+set -e
+
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+REPO="https://github.com/ilPez00/config_installer.git"
+DEST="$HOME/config_installer"
+
+echo ""
+echo -e "${GREEN}══════════════════════════════════════════${NC}"
+echo -e "${GREEN}       config_installer — download${NC}"
+echo -e "${GREEN}══════════════════════════════════════════${NC}"
+echo ""
+
+# Install git if not present
+if ! command -v git &>/dev/null; then
+    echo -e "${YELLOW}[!]${NC} git not found, installing..."
+    sudo apt update && sudo apt install -y git
+fi
+
+# Clone or update
+if [ -d "$DEST/.git" ]; then
+    echo -e "${GREEN}[+]${NC} Updating existing clone at $DEST"
+    cd "$DEST" && git pull
+else
+    echo -e "${GREEN}[+]${NC} Cloning to $DEST"
+    git clone "$REPO" "$DEST"
+fi
+
+echo ""
+echo -e "${GREEN}[+]${NC} Downloaded to: $DEST"
+echo ""
+echo "  Next steps:"
+echo ""
+echo "  To PACK configs from this machine:"
+echo "    cd $DEST"
+echo "    bash pack_configs"
+echo ""
+echo "  To INSTALL configs (needs configs/ folder):"
+echo "    cd $DEST"
+echo "    bash install_configs"
+echo ""
